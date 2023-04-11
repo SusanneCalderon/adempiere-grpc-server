@@ -9,6 +9,7 @@ plugins {
 group 'com.nikhilm'
 sourceCompatibility = 1.11
 def grpcVersion = '1.53.0'
+//  Base Version
 def baseVersion = 'shw-aereo-1.0.3'
 def baseGroupId = 'com.erpya'
 def customBaseVersion = ""
