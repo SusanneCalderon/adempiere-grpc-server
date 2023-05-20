@@ -1,12 +1,14 @@
 server:
     port: 50059
     services:
+       - bank_statement_match
        - business
        - business_partner
        - core
        - dashboarding
        - dictionary
        - enrollment
+       - express_movement
        - express_receipt
        - express_shipment
        - file_management
@@ -15,9 +17,11 @@ server:
        - in_out
        - invoice
        - issue_management
+       - match_po_receipt_invoice
        - material_management
        - order
        - payment
+       - payment_allocation
        - payment_print_export
        - payroll_action_notice
        - pos

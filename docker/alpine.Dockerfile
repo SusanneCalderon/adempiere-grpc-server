@@ -1,4 +1,4 @@
-FROM eclipse-temurin:11-jdk-focal
+FROM eclipse-temurin:11-jdk-alpine
 
 LABEL maintainer="ysenih@erpya.com; EdwinBetanc0urt@outlook.com" \
 	description="ADempiere gRPC All In One Server used as ADempiere adempiere-grpc-server"
@@ -6,7 +6,7 @@ LABEL maintainer="ysenih@erpya.com; EdwinBetanc0urt@outlook.com" \
 # Init ENV with default values
 ENV \
 	SERVER_PORT="50059" \
-	SERVICES_ENABLED="business; business_partner; core; dashboarding; dictionary; enrollment; express_receipt; express_shipment; file_management; general_ledger; in_out; invoice; issue_management; log; material_management; order; payment; payment_print_export; payroll_action_notice; pos; product; security; store; time_control; time_record; ui; user_customization; workflow;" \
+	SERVICES_ENABLED="bank_statement_match; business; business_partner; core; dashboarding; dictionary; enrollment; express_movement; express_receipt; express_shipment; file_management; general_ledger; in_out; invoice; issue_management; log; match_po_receipt_invoice; material_management; order; payment; payment_allocation; payment_print_export; payroll_action_notice; pos; product; security; store; time_control; time_record; ui; user_customization; workflow;" \
 	SERVER_LOG_LEVEL="WARNING" \
 	SECRET_KEY="A42CF908019918B1D9D9E04E596658345D162D4C0127A4C8365E8BDF6B015CC7" \
 	DB_HOST="localhost" \
@@ -18,6 +18,20 @@ ENV \
 	ADEMPIERE_APPS_TYPE="wildfly" \
 	TZ="America/Caracas"
 
+EXPOSE ${SERVER_PORT}
+
+
+# Add operative system dependencies
+RUN rm -rf /tmp/* && \
+	apk update && apk add --no-cache \
+		tzdata \
+		bash \
+		fontconfig \
+		ttf-dejavu && \
+	echo "Set Timezone..." && \
+	echo $TZ > /etc/timezone
+
+
 WORKDIR /opt/apps/server
 
 # Copy src files
@@ -25,19 +39,6 @@ COPY docker/adempiere-grpc-server /opt/apps/server
 COPY docker/env.yaml /opt/apps/server/env.yaml
 COPY docker/start.sh /opt/apps/server/start.sh
 
-EXPOSE ${SERVER_PORT}
-
-# timezone
-ENV TZ America/Caracas
-
-# Add operative system dependencies
-RUN	apt-get update && apt-get install -y tzdata \
-		bash \
-	 	fontconfig \
-		ttf-dejavu && \
-		rm -rf /var/lib/apt/lists/* \
-		echo "Set Timezone..." && \
-	 	echo $TZ > /etc/timezone
 
 RUN addgroup adempiere && \
 	adduser --disabled-password --gecos "" --ingroup adempiere --no-create-home adempiere && \
@@ -48,4 +49,3 @@ USER adempiere
 
 # Start app
 ENTRYPOINT ["sh" , "start.sh"]
-

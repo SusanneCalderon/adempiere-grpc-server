@@ -76,6 +76,9 @@ dependencies {
 	// ADempiere External Libraries
 	implementation 'com.github.jjYBdx4IL:ecs:1.4.2.1'
 
+	// ADempiere Projects with additional features
+	// Dashboard Improvements
+	implementation 'io.github.adempiere:adempiere-dashboard-improvements:1.0.3'
 	// Point Of Sales Improvements
 	implementation 'io.github.adempiere:adempiere-pos-improvements:1.0.0'
 }
