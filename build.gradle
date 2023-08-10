@@ -10,8 +10,8 @@ plugins {
 group 'com.nikhilm'
 sourceCompatibility = 1.11
 def grpcVersion = '1.55.1'
-def baseVersion = '3.9.4'
-def baseGroupId = 'io.github.adempiere'
+def baseVersion = 'shw-air-terminal-vertical-1.0.27'
+def baseGroupId = 'com.erpya'
 def customBaseVersion = ""
 def javaMainClass = "org.spin.server.AllInOneServices"
 repositories {
@@ -86,7 +86,9 @@ dependencies {
 	// Point Of Sales Improvements
 	implementation "${baseGroupId}:adempiere-pos-improvements:1.0.0"
 	// Business Processors (To Task's and Schedulers)
-	implementation "${baseGroupId}:adempiere-business-processors:1.0.5"
+	implementation "${baseGroupId}:adempiere-business-processors:shw-1.0.0"
+	// JWT
+	implementation "${baseGroupId}:adempiere-jwt-token:shw-1.0.0"
 }
 
 configurations.all {
