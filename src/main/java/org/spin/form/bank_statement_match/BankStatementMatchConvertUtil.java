@@ -17,20 +17,26 @@ package org.spin.form.bank_statement_match;
 import java.math.BigDecimal;
 
 import org.adempiere.core.domains.models.I_AD_Ref_List;
+import org.adempiere.core.domains.models.X_C_BankStatement;
 import org.adempiere.core.domains.models.X_C_Payment;
 import org.adempiere.core.domains.models.X_I_BankStatement;
 import org.compiere.model.MBPartner;
+import org.compiere.model.MBank;
+import org.compiere.model.MBankAccount;
 import org.compiere.model.MBankStatement;
 import org.compiere.model.MCurrency;
 import org.compiere.model.MPayment;
 import org.compiere.model.MRefList;
 import org.compiere.util.Env;
 import org.compiere.util.Util;
+import org.spin.backend.grpc.form.bank_statement_match.BankAccount;
 import org.spin.backend.grpc.form.bank_statement_match.BankStatement;
 import org.spin.backend.grpc.form.bank_statement_match.BusinessPartner;
 import org.spin.backend.grpc.form.bank_statement_match.Currency;
 import org.spin.backend.grpc.form.bank_statement_match.ImportedBankMovement;
 import org.spin.backend.grpc.form.bank_statement_match.MatchingMovement;
+import org.spin.backend.grpc.form.bank_statement_match.Payment;
+import org.spin.backend.grpc.form.bank_statement_match.ResultMovement;
 import org.spin.backend.grpc.form.bank_statement_match.TenderType;
 import org.spin.base.util.ValueUtil;
 
@@ -39,6 +45,47 @@ import org.spin.base.util.ValueUtil;
  * @author Edwin Betancourt, EdwinBetanc0urt@outlook.com, https://github.com/EdwinBetanc0urt
  */
 public class BankStatementMatchConvertUtil {
+
+	public static BankAccount.Builder convertBankAccount(int bankAccountId) {
+		if (bankAccountId > 0) {
+			MBankAccount bankAccount = MBankAccount.get(Env.getCtx(), bankAccountId);
+			return convertBankAccount(bankAccount);
+		}
+		return BankAccount.newBuilder();
+	}
+	public static BankAccount.Builder convertBankAccount(MBankAccount bankAccount) {
+		BankAccount.Builder builder = BankAccount.newBuilder();
+		if (bankAccount == null || bankAccount.getC_BankAccount_ID() <= 0) {
+			return builder;
+		}
+		
+		MBank bank = MBank.get(Env.getCtx(), bankAccount.getC_Bank_ID());
+
+		String accountNo = ValueUtil.validateNull(bankAccount.getAccountNo());
+		int accountNoLength = accountNo.length();
+		if (accountNoLength > 4) {
+			accountNo = accountNo.substring(accountNoLength - 4);
+		}
+		accountNo = String.format("%1$" + 20 + "s", accountNo).replace(" ", "*");
+
+		Currency.Builder currencyBuilder = convertCurrency(bankAccount.getC_Currency_ID());
+		builder.setId(bankAccount.getC_BankAccount_ID())
+			.setUuid(ValueUtil.validateNull(bankAccount.getUUID()))
+			.setAccountNo(accountNo)
+			.setAccountName(ValueUtil.validateNull(bankAccount.getName()))
+			.setBankName(
+				ValueUtil.validateNull(bank.getName())
+			)
+			.setCurrency(
+				currencyBuilder
+			)
+			.setCurrentBalance(
+				ValueUtil.getDecimalFromBigDecimal(bankAccount.getCurrentBalance())
+			)
+		;
+
+		return builder;
+	}
 
 	public static BankStatement.Builder convertBankStatement(int bankStatementId) {
 		BankStatement.Builder builder = BankStatement.newBuilder();
@@ -54,16 +101,32 @@ public class BankStatementMatchConvertUtil {
 		if (bankStatement == null || bankStatement.getC_BankStatement_ID() <= 0) {
 			return builder;
 		}
+
+		String documentSatusName = MRefList.getListName(
+			Env.getCtx(),
+			X_C_BankStatement.DOCSTATUS_AD_Reference_ID,
+			bankStatement.getDocStatus()
+		);
+
 		builder.setId(bankStatement.getC_BankStatement_ID())
 			.setUuid(
 				ValueUtil.validateNull(
 					bankStatement.getUUID()
 				)
 			)
-			.setBankAccountId(bankStatement.getC_BankAccount_ID())
+			.setBankAccount(
+				convertBankAccount(
+					bankStatement.getC_BankAccount_ID()
+				)
+			)
 			.setDocumentNo(
 				ValueUtil.validateNull(
 					bankStatement.getDocumentNo()
+				)
+			)
+			.setName(
+				ValueUtil.validateNull(
+					bankStatement.getName()
 				)
 			)
 			.setDescription(
@@ -73,7 +136,7 @@ public class BankStatementMatchConvertUtil {
 			)
 			.setDocumentStatus(
 				ValueUtil.validateNull(
-					bankStatement.getDocStatus()
+					documentSatusName
 				)
 			)
 			.setStatementDate(
@@ -83,6 +146,21 @@ public class BankStatementMatchConvertUtil {
 			)
 			.setIsManual(bankStatement.isManual())
 			.setIsProcessed(bankStatement.isProcessed())
+			.setBeginningBalance(
+				ValueUtil.getDecimalFromBigDecimal(
+					bankStatement.getBeginningBalance()
+				)
+			)
+			.setStatementDifference(
+				ValueUtil.getDecimalFromBigDecimal(
+					bankStatement.getStatementDifference()
+				)
+			)
+			.setEndingBalance(
+				ValueUtil.getDecimalFromBigDecimal(
+					bankStatement.getEndingBalance()
+				)
+			)
 		;
 
 		return builder;
@@ -195,6 +273,64 @@ public class BankStatementMatchConvertUtil {
 			.setDescription(
 				ValueUtil.validateNull(description)
 			)
+		;
+
+		return builder;
+	}
+
+	public static Payment.Builder convertPayment(MPayment payment) {
+		Payment.Builder builder = Payment.newBuilder();
+		if (payment == null) {
+			return builder;
+		}
+
+		BusinessPartner.Builder businessPartnerBuilder = convertBusinessPartner(
+			payment.getC_BPartner_ID()
+		);
+
+		Currency.Builder currencyBuilder = convertCurrency(
+			payment.getC_Currency_ID()
+		);
+
+		TenderType.Builder tenderTypeBuilder = convertTenderType(
+			payment.getTenderType()
+		);
+		boolean isReceipt = payment.isReceipt();
+		BigDecimal paymentAmount = payment.getPayAmt();
+		if (!isReceipt) {
+			paymentAmount = paymentAmount.negate();
+		}
+
+		builder.setId(payment.getC_Payment_ID())
+			.setUuid(
+				ValueUtil.validateNull(
+					payment.getUUID()
+				)
+			)
+			.setTransactionDate(
+				ValueUtil.getLongFromTimestamp(
+					payment.getDateTrx()
+				)
+			)
+			.setIsReceipt(isReceipt)
+			.setDocumentNo(
+				ValueUtil.validateNull(
+					payment.getDocumentNo()
+				)
+			)
+			.setDescription(
+				ValueUtil.validateNull(
+					payment.getDescription()
+				)
+			)
+			.setAmount(
+				ValueUtil.getDecimalFromBigDecimal(
+					paymentAmount
+				)
+			)
+			.setBusinessPartner(businessPartnerBuilder)
+			.setTenderType(tenderTypeBuilder)
+			.setCurrency(currencyBuilder)
 		;
 
 		return builder;
@@ -320,6 +456,11 @@ public class BankStatementMatchConvertUtil {
 					bankStatemet.getTrxAmt()
 				)
 			)
+			.setIsAutomatic(
+				ValueUtil.stringToBoolean(
+					bankStatemet.getEftMemo()
+				)
+			)
 		;
 
 		if (bankStatemet.getC_Payment_ID() > 0) {
@@ -328,6 +469,16 @@ public class BankStatementMatchConvertUtil {
 				.setDocumentNo(
 					ValueUtil.validateNull(
 						payment.getDocumentNo()
+					)
+				)
+				.setPaymentAmount(
+					ValueUtil.getDecimalFromBigDecimal(
+						payment.getPayAmt()
+					)
+				)
+				.setPaymentDate(
+					ValueUtil.getLongFromTimestamp(
+						payment.getDateTrx()
 					)
 				)
 			;
@@ -347,6 +498,125 @@ public class BankStatementMatchConvertUtil {
 			);
 			builder.setCurrency(currencyBuilder);
 		}
+
+		return builder;
+	}
+
+
+	public static ResultMovement.Builder convertResultMovement(X_I_BankStatement bankStatemet) {
+		ResultMovement.Builder builder = ResultMovement.newBuilder();
+		if (bankStatemet == null || bankStatemet.getI_BankStatement_ID() <= 0) {
+			return builder;
+		}
+
+		builder.setId(bankStatemet.getI_BankStatement_ID())
+			.setUuid(
+				ValueUtil.validateNull(
+					bankStatemet.getUUID()
+				)
+			)
+			.setReferenceNo(
+				ValueUtil.validateNull(
+					bankStatemet.getReferenceNo()
+				)
+			)
+			.setIsReceipt(
+				bankStatemet.getTrxAmt().compareTo(BigDecimal.ZERO) < 0
+			)
+			.setReferenceNo(
+				ValueUtil.validateNull(
+					bankStatemet.getReferenceNo()
+				)
+			)
+			.setMemo(
+				ValueUtil.validateNull(
+					bankStatemet.getMemo()
+				)
+			)
+			.setTransactionDate(
+				ValueUtil.getLongFromTimestamp(
+					bankStatemet.getStatementLineDate()
+				)
+			)
+			.setAmount(
+				ValueUtil.getDecimalFromBigDecimal(
+					bankStatemet.getTrxAmt()
+				)
+			)
+			.setIsAutomatic(
+				ValueUtil.stringToBoolean(
+					bankStatemet.getEftMemo()
+				)
+			)
+		;
+
+		BusinessPartner.Builder businessPartnerBuilder = BankStatementMatchConvertUtil.convertBusinessPartner(
+			bankStatemet.getC_BPartner_ID()
+		);
+		if (bankStatemet.getC_BPartner_ID() <= 0) {
+			businessPartnerBuilder.setName(
+				ValueUtil.validateNull(
+					bankStatemet.getBPartnerValue()
+				)
+			).setValue(
+				ValueUtil.validateNull(
+					bankStatemet.getBPartnerValue()
+				)
+			);
+		}
+		builder.setBusinessPartner(businessPartnerBuilder);
+
+		Currency.Builder currencyBuilder = Currency.newBuilder();
+		if (bankStatemet.getC_Currency_ID() > 0) {
+			currencyBuilder = BankStatementMatchConvertUtil.convertCurrency(
+				bankStatemet.getC_Currency_ID()
+			);
+		} else {
+ 			currencyBuilder = BankStatementMatchConvertUtil.convertCurrency(
+				bankStatemet.getISO_Code()
+			);
+		}
+		builder.setCurrency(currencyBuilder);
+
+		if (bankStatemet.getC_Payment_ID() > 0) {
+			MPayment payment = new MPayment(Env.getCtx(), bankStatemet.getC_Payment_ID(), null);
+			builder.setPaymentId(payment.getC_Payment_ID())
+				.setDocumentNo(
+					ValueUtil.validateNull(
+						payment.getDocumentNo()
+					)
+				)
+				.setPaymentAmount(
+					ValueUtil.getDecimalFromBigDecimal(
+						payment.getPayAmt()
+					)
+				)
+				.setPaymentDate(
+					ValueUtil.getLongFromTimestamp(
+						payment.getDateTrx()
+					)
+				)
+			;
+			TenderType.Builder tenderTypeBuilder = convertTenderType(
+				payment.getTenderType()
+			);
+			builder.setTenderType(tenderTypeBuilder);
+
+			if (builder.getBusinessPartner().getId() <= 0) {
+				businessPartnerBuilder = convertBusinessPartner(
+					payment.getC_BPartner_ID()
+				);
+			}
+
+			if (builder.getCurrency().getId() <= 0) {
+				currencyBuilder = convertCurrency(
+					payment.getC_Currency_ID()
+				);
+			}
+		}
+
+		builder.setBusinessPartner(businessPartnerBuilder)
+			.setCurrency(currencyBuilder);
 
 		return builder;
 	}
